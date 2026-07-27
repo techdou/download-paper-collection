@@ -1,0 +1,29 @@
+{
+  "aliases": {
+    "title": ["作品名", "论文名称"],
+    "pdf_url": ["公开获取", "PDF入口"],
+    "venue": ["载体", "发表刊物"]
+  },
+  "global": {
+    "header_row": 1,
+    "header_span": 1
+  },
+  "sheets": {
+    "论文总表": {
+      "header_row": 2,
+      "header_span": 2,
+      "columns": {
+        "title_en": "英文题名",
+        "title_zh": "中文题名",
+        "venue": "期刊或会议",
+        "year": "年份",
+        "sources": ["PDF入口", "DOI字段", "预印本"],
+        "source_kinds": {
+          "PDF入口": "pdf_url",
+          "DOI字段": "doi",
+          "预印本": "arxiv"
+        }
+      }
+    }
+  }
+}

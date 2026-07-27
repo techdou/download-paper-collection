@@ -1,0 +1,55 @@
+# ── Python 编译缓存 ────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.Python
+
+# ── 测试 / 类型检查缓存 ────────────────────────────────
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ── 敏感信息 / API 密钥（绝不入库）─────────────────────
+# Cookie / Authorization 头 / 会话凭证可能被用户配置
+.env
+.env.*
+!.env.example
+*.secret
+*_api_key*
+*_token*
+cookies.txt
+*.cookies
+credentials.json
+secrets.json
+
+# ── 下载产物（PDF / 清单 / 工作目录）──────────────────
+output/
+downloads/
+*.pdf
+manifest.json
+!references/**/*.json
+!tests/**/*.json
+
+# ── 开发软件配置目录 / IDE ─────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ── 操作系统产生的文件 ─────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+$RECYCLE_BIN/
+ehthumbs.db
+
+# ── 日志 / 临时文件 ────────────────────────────────────
+*.log
+.tmp/
+tmp/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "自适应论文合集下载"
+  short_description: "智能匹配 Excel 论文结构，复用会话合并多来源下载并校验归档"
+  default_prompt: "Use $download-paper-collection to adaptively inspect this Excel literature list, accept only high-confidence paper sheets, resolve ambiguous columns with explicit mappings, download PDFs from all available sources, reusing user-supplied session or request headers when provided, validate the collection, and report exact schema decisions, successes, and failures."
