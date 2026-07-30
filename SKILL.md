@@ -1,11 +1,11 @@
 ---
 name: download-paper-collection
-description: Adaptively inspect heterogeneous Excel literature lists, identify paper-bearing worksheets and title/source fields with confidence scoring, merge PDF/URL/DOI/arXiv/OpenReview sources, use available direct links and user-supplied authenticated sessions or request headers, deduplicate by DOI/arXiv/title, validate PDF integrity, and produce auditable manifests. Use when the user provides an .xlsx or .xlsm paper list and asks to batch download, resume, organize, validate, recover, or package papers across mixed public, publisher, institutional, or session-dependent sources.
+description: Batch download, organize, and validate academic papers from an Excel literature list. Handles open-access (arXiv, CVF, NeurIPS, AAAI, MDPI), institutional proxy (EZproxy/CARSI via Wuhan University, NENU, etc.), and browser-automated download (WebBridge/CDP) for paywalled publishers (IEEE, ScienceDirect/Elsevier, ACM, Wiley). Use whenever the user mentions downloading papers, batch PDF collection, 论文下载, organizing a literature list, or accessing papers through a university proxy or VPN — even if they don't say "skill" or name this tool.
 metadata:
-  version: "3.1.0"
+  version: "4.0.0"
   domain: "research-literature"
-  workflow: "adaptive-inspect-map-download-validate-package"
-  compatibility: "Requires Python 3.10+, openpyxl, PyYAML, writable local storage, and internet access. Optional Cookie, Authorization, and custom HTTP headers may be supplied for session-dependent sources."
+  workflow: "inspect → classify-sources → download-OA → download-proxy → validate → archive → audit"
+  compatibility: "Requires Python 3.10+, openpyxl, PyYAML, poppler-utils. Optional: Node.js 18+ and kimi-webbridge for browser-automated downloads. Optional Cookie, Authorization, and custom HTTP headers for session-dependent sources."
 ---
 
 # Download Paper Collection
@@ -13,6 +13,32 @@ metadata:
 Turn a heterogeneous Excel literature list into a verified collection:
 
 `<worksheet>/<journal-or-conference>/<paper title>.pdf`
+
+## Quick-start: which download path to use
+
+When you receive a paper download request, classify each paper into one of these paths **before downloading**:
+
+| Path | When | Tool | Key script |
+|------|------|------|------------|
+| **A. Direct OA** | Paper is on arXiv, CVF, NeurIPS, AAAI, PMLR, ESSD, or has a known OA PDF link | `download_papers.py` (urllib) | Core downloader handles this |
+| **B. Institutional proxy** | Paper is behind IEEE/ACM/Elsevier paywall, user has university VPN/proxy access | `institutional_proxy_batch.mjs` + WebBridge | `scripts/institutional_proxy_batch.mjs` |
+| **C. Browser fallback** | Proxy fetch blocked by Arkose/Cloudflare, or PDF link is JS-rendered | User manually downloads, then validate + archive | `validate_pdf_deep.py` |
+| **D. Metadata only** | No legal full-text access exists | Record as `manual_needed`, skip download | — |
+
+**Decision rule**: Try A first. If the paper is not OA, check if the user has institutional proxy access (ask for proxy URL if not provided). Use B for proxy-accessible papers. If B fails due to anti-bot challenges, fall back to C. Never attempt D unless all legal sources are exhausted.
+
+Read [references/browser-download-playbook.md](references/browser-download-playbook.md) for the full decision tree and per-publisher strategies.
+
+## Security boundaries (read before any download)
+
+These are non-negotiable. Violating them is worse than not downloading the paper.
+
+- Use only the user's legitimate institutional access channels.
+- Never bypass CAPTCHA, Cloudflare, Arkose Labs, OTP, 2FA, or any security challenge. When detected, stop automation and hand the specific paper to the user.
+- Never read, export, or display passwords, cookies, session tokens, or Authorization headers.
+- Access sites serially with conservative delays (8–15 seconds between papers to the same host).
+- Do not use UA spoofing, fingerprint forgery, proxy rotation, or cookie export.
+- Do not save HTML, login pages, error pages, or supplementary materials as if they were the main paper PDF.
 
 Use the bundled scripts. Do not write ad hoc parsing or download logic unless the workbook cannot be represented by the supported schema configuration.
 
@@ -221,3 +247,28 @@ python3 "$SKILL_DIR/scripts/smoke_test.py" --verbose
 ```
 
 The format validator enforces the portable top-level frontmatter allowlist: `name`, `description`, `metadata`, `license`, and `allowed-tools`. Put custom fields such as `version`, `compatibility`, `author`, and `domain` inside `metadata`. Do not deliver a modified Skill when either command fails.
+
+## Institutional proxy and browser automation modules
+
+For Path B and C above. The core `download_papers.py` cannot reach these sources.
+
+### Prerequisites
+
+- `kimi-webbridge` daemon on `127.0.0.1:10086` with browser extension connected (for Path B).
+- `poppler-utils` (`pdfinfo`, `pdftotext`) for deep validation.
+- Node.js 18+ for `.mjs` scripts.
+
+### Modules
+
+| Module | Purpose |
+|--------|---------|
+| `scripts/institutional_proxy_batch.mjs` | Batch orchestrator: queue → resume → navigate → challenge detect → stream → validate → archive → manifest. Start here for Path B. |
+| `scripts/lib/stream_from_tab.mjs` | Stream-download PDF from authorized browser tab. Solves CDP timeout on large binaries via 96KB chunking. |
+| `scripts/lib/challenge_detect.mjs` | Detect CAPTCHA/Cloudflare/Arkose/SSO/OTP. Stops automation on detection. |
+| `scripts/validate_pdf_deep.py` | Five-check validation: %PDF header, EOF, size, pages, title token coverage + DOI. Unicode-path compatible. |
+
+### Reference docs (read on demand)
+
+- [references/institutional-proxy.md](references/institutional-proxy.md) — EZproxy/CARSI formats, per-publisher proxy path segments, PII lookup, session expiry pitfalls.
+- [references/publisher-pdf-endpoints.md](references/publisher-pdf-endpoints.md) — Per-publisher PDF URL patterns and automation feasibility (IEEE, ScienceDirect, ACM, AAAI, MDPI, Wiley, IGARSS).
+- [references/browser-download-playbook.md](references/browser-download-playbook.md) — Full download decision tree, 96KB chunking technique, security boundaries.

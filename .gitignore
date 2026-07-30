@@ -41,6 +41,12 @@ manifest.json
 *~
 .project
 .settings/
+.zcode/
+
+# ── Node.js ──────────────────────────────────────────
+node_modules/
+package-lock.json
+yarn.lock
 
 # ── 操作系统产生的文件 ─────────────────────────────────
 .DS_Store
