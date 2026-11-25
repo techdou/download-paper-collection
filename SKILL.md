@@ -55,7 +55,7 @@ Required runtime:
 Install Python dependencies with:
 
 ```bash
-python3 -m pip install -r "$SKILL_DIR/requirements.txt"
+python -m pip install -r "$SKILL_DIR/requirements.txt"
 ```
 
 Publisher, institutional, and session-dependent sources may require user-provided Cookie, Authorization, or custom request headers. The Skill should use the access context available in the execution environment, continue through alternative sources, and preserve actionable recovery information for unresolved interactive pages.
@@ -73,7 +73,7 @@ Resolve the absolute skill directory as `SKILL_DIR`. Never assume the current wo
 ### 1. Run adaptive preflight
 
 ```bash
-python3 "$SKILL_DIR/scripts/download_papers.py" \
+python "$SKILL_DIR/scripts/download_papers.py" \
   --input "/path/to/literature.xlsx" \
   --inspect-only \
   --schema-out "/tmp/paper-schema-report.json"
@@ -104,7 +104,7 @@ When a relevant sheet is `low_confidence` or `unrecognized`:
 Direct mapping:
 
 ```bash
-python3 "$SKILL_DIR/scripts/download_papers.py" \
+python "$SKILL_DIR/scripts/download_papers.py" \
   --input "/path/to/literature.xlsx" \
   --sheets "论文总表" \
   --title-column "文档名" \
@@ -116,7 +116,7 @@ python3 "$SKILL_DIR/scripts/download_papers.py" \
 Reusable JSON mapping:
 
 ```bash
-python3 "$SKILL_DIR/scripts/download_papers.py" \
+python "$SKILL_DIR/scripts/download_papers.py" \
   --input "/path/to/literature.xlsx" \
   --schema-config "$SKILL_DIR/references/schema-config.example.json" \
   --inspect-only
@@ -129,7 +129,7 @@ Never make an uncertain sheet downloadable merely by setting a very low confiden
 ### 3. Download and resume
 
 ```bash
-python3 "$SKILL_DIR/scripts/download_papers.py" \
+python "$SKILL_DIR/scripts/download_papers.py" \
   --input "/path/to/literature.xlsx" \
   --output "/path/to/paper-collection" \
   --schema-config "/path/to/schema.json" \
@@ -166,7 +166,7 @@ Rules:
 ### 4. Validate independently
 
 ```bash
-python3 "$SKILL_DIR/scripts/validate_collection.py" \
+python "$SKILL_DIR/scripts/validate_collection.py" \
   --collection "/path/to/paper-collection"
 ```
 
@@ -242,8 +242,8 @@ Do not stop merely because some papers fail. Preserve all per-source attempts an
 After any change, run:
 
 ```bash
-python3 "$SKILL_DIR/scripts/validate_skill.py" "$SKILL_DIR"
-python3 "$SKILL_DIR/scripts/smoke_test.py" --verbose
+python "$SKILL_DIR/scripts/validate_skill.py" "$SKILL_DIR"
+python "$SKILL_DIR/scripts/smoke_test.py" --verbose
 ```
 
 The format validator enforces the portable top-level frontmatter allowlist: `name`, `description`, `metadata`, `license`, and `allowed-tools`. Put custom fields such as `version`, `compatibility`, `author`, and `domain` inside `metadata`. Do not deliver a modified Skill when either command fails.

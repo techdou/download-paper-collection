@@ -122,3 +122,10 @@ build/
 # ── 系统与临时文件 ──
 desktop.ini
 *.tmp
+
+# ── 2026-11-26 安全与内部文档防线补齐 ──
+.mcp.json
+docs/
+*-private.md
+NOTES.md
+PLAN*.md
