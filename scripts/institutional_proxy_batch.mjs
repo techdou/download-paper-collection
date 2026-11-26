@@ -95,19 +95,33 @@ function writeRecord(logPath, manifestPath, record) {
   fs.renameSync(tmp, manifestPath);
 }
 
+class ValidatorProtocolError extends Error {}
+
 function validatePdf(validateScript, pdfPath, title, doi) {
   const run = spawnSync('python', [
     validateScript, '--pdf', pdfPath, '--title', title, '--doi', doi || '',
-  ], { encoding: 'utf8', timeout: 180000, windowsHide: true });
+  ], {
+    encoding: 'utf8', timeout: 180000, windowsHide: true,
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8' },
+  });
+  const stderr = (run.stderr || '').trim().slice(0, 2000);
+  if (run.error || (run.status !== 0 && run.status !== 2)) {
+    throw new ValidatorProtocolError(
+      `validator process failed (${run.error?.code || run.signal || `exit ${run.status}`})${stderr ? `: ${stderr}` : ''}`,
+    );
+  }
 
-  const lines = (run.stdout || '').trim().split(/\r?\n/).filter(Boolean);
-  let result = null;
-  try { result = JSON.parse(lines.at(-1) || '{}'); } catch {}
-  return {
-    ok: run.status === 0 && Boolean(result?.valid),
-    result,
-    stderr: (run.stderr || '').trim().slice(0, 2000),
-  };
+  let result;
+  try {
+    result = JSON.parse(run.stdout.trim());
+  } catch {
+    throw new ValidatorProtocolError(`validator stdout is not JSON (exit ${run.status})`);
+  }
+  // The validator contract is exit 0 / valid:true or exit 2 / valid:false.
+  if (result?.valid !== (run.status === 0)) {
+    throw new ValidatorProtocolError(`validator validity flag does not match exit ${run.status}`);
+  }
+  return { ok: result.valid, result, stderr };
 }
 
 async function main() {
@@ -131,12 +145,17 @@ async function main() {
     process.exit(2);
   }
 
+  process.exitCode = await runBatch(args);
+}
+
+export async function runBatch(args, {
+  command = createCommand({ daemon: args.daemon, session: args.session }),
+  wait = sleep,
+} = {}) {
   const queue = JSON.parse(fs.readFileSync(args.queue, 'utf8'));
   const logPath = path.join(args.logDir, '下载日志.jsonl');
   const manifestPath = path.join(args.logDir, '下载清单.json');
   fs.mkdirSync(args.logDir, { recursive: true });
-
-  const command = createCommand({ daemon: args.daemon, session: args.session });
 
   // 断点续传：读取已成功记录
   const prior = readLog(logPath);
@@ -155,23 +174,22 @@ async function main() {
     const itemKey = item.doi || item.title;
     if (successful.has(itemKey)) continue;
 
-    // 已有归档文件则跳过
-    if (item.archive_path && fs.existsSync(item.archive_path)) {
-      const existing = validatePdf(args.validateScript, item.archive_path, item.title, item.doi);
-      if (existing.ok) {
-        writeRecord(logPath, manifestPath, {
-          ...item, status: 'downloaded_verified', source: 'existing_archive',
-          validation: existing.result, recorded_at: now(),
-        });
-        successful.add(itemKey);
-        continue;
-      }
-    }
-
-    attempted++;
     let opened = false;
-
     try {
+      // 已有归档文件则跳过；协议故障与新下载文件使用同一错误分支。
+      if (item.archive_path && fs.existsSync(item.archive_path)) {
+        const existing = validatePdf(args.validateScript, item.archive_path, item.title, item.doi);
+        if (existing.ok) {
+          writeRecord(logPath, manifestPath, {
+            ...item, status: 'downloaded_verified', source: 'existing_archive',
+            validation: existing.result, recorded_at: now(),
+          });
+          successful.add(itemKey);
+          continue;
+        }
+      }
+
+      attempted++;
       // 1. 导航到文章页（授权）
       console.log(`[${attempted}] ${itemKey} navigating...`);
       await command('navigate', {
@@ -181,7 +199,7 @@ async function main() {
       }, 120000);
       openedFirst = true;
       opened = true;
-      await sleep(3000);
+      await wait(3000);
 
       // 2. 安全挑战检测
       const challenge = await checkCurrentPage(command);
@@ -268,12 +286,17 @@ async function main() {
       }
 
     } catch (error) {
-      console.error(`  ERROR: ${error.message}`);
+      const protocolError = error instanceof ValidatorProtocolError;
+      console.error(`  ${protocolError ? 'VALIDATOR PROTOCOL ERROR' : 'ERROR'}: ${error.message}`);
       writeRecord(logPath, manifestPath, {
-        ...item, status: 'download_failed',
+        ...item, status: protocolError ? 'validator_protocol_error' : 'download_failed',
         error: String(error.message).slice(0, 2000),
         recorded_at: now(),
       });
+      if (protocolError) {
+        stopReason = 'validator_protocol_error';
+        break;
+      }
     } finally {
       if (opened) {
         await command('close_tab', {}, 30000).catch(() => {});
@@ -283,7 +306,7 @@ async function main() {
     // 篇间随机延迟
     if (attempted < args.limit && !stopReason) {
       const delay = args.delayMin + Math.floor(Math.random() * (args.delayMax - args.delayMin + 1));
-      await sleep(delay);
+      await wait(delay);
     }
   }
 
@@ -298,12 +321,19 @@ async function main() {
   console.log(`successful total: ${successful.size}`);
   console.log(`stop reason: ${stopReason || 'none'}`);
   console.log(`status breakdown: ${JSON.stringify(byStatus)}`);
+  if (stopReason === 'validator_protocol_error') {
+    console.error('\n批次因校验器协议故障提前停止。未隔离当前 PDF；请修复校验器后重试。');
+    return 1;
+  }
   if (stopReason) {
     console.error(`\n批次因 ${stopReason} 提前停止。请在浏览器中处理安全挑战后重试。`);
   }
+  return 0;
 }
 
-main().catch(e => {
-  console.error('FATAL:', e);
-  process.exit(1);
-});
+if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
+  main().catch(e => {
+    console.error('FATAL:', e);
+    process.exitCode = 1;
+  });
+}
